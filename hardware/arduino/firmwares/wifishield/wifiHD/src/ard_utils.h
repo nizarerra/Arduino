@@ -36,9 +36,12 @@
 #define SIGN2_DN 		LED2_DN
 #define SIGN2_TL 		LED2_TL
 
-#define DEB_PIN_UP() 			gpio_set_gpio_pin(DEB_PIN_GPIO)
-#define DEB_PIN_DN() 			gpio_clr_gpio_pin(DEB_PIN_GPIO)
-#define DEB_PIN_ENA() 			gpio_enable_gpio_pin(DEB_PIN_GPIO);
+#define DEB_PIN_UP(X) 			gpio_set_gpio_pin(DEB##X##_PIN_GPIO)
+#define DEB_PIN_DN(X) 			gpio_clr_gpio_pin(DEB##X##_PIN_GPIO)
+#define DEB_PIN_ENA(X) 			gpio_enable_gpio_pin(DEB##X##_PIN_GPIO)
+#define DEB_PIN_TOGGLE(X)		gpio_tgl_gpio_pin(DEB##X##_PIN_GPIO)
+#define DEB_PIN_TRIGGER(X)		DEB_PIN_DN(X);  DEB_PIN_UP(X);
+
 
 #else
 #define SIGN0_UP()
@@ -51,9 +54,11 @@
 #define SIGN2_DN()
 #define SIGN2_TL()
 
-#define DEB_PIN_UP()
-#define DEB_PIN_DN()
-#define DEB_PIN_ENA()
+#define DEB_PIN_UP(X)
+#define DEB_PIN_DN(X)
+#define DEB_PIN_ENA(X)
+#define DEB_PIN_TOGGLE(X)
+#define DEB_PIN_TRIGGER(X)
 
 //#define TOGGLE_SIG0
 #endif
@@ -119,9 +124,10 @@
 
 
 #define PUT_DATA_INT(INT, BYTE, IDX)   {           		\
-    uint16_t _int = INT;                              	\
-    BYTE[IDX] = (uint8_t)((_int & 0xff00)>>8);       	\
-    BYTE[IDX+1] = (uint8_t)(_int & 0xff);              	\
+    uint16_t _int = INT;								\
+	BYTE[IDX] = 2;                            			\
+    BYTE[IDX+1] = (uint8_t)((_int & 0xff00)>>8);       	\
+    BYTE[IDX+2] = (uint8_t)(_int & 0xff);              	\
 }
 
 #define PUT_DATA_BYTE(DATA, BYTE, IDX)   {           	\
@@ -201,7 +207,7 @@
 #define STATSPI_TIMEOUT_ERROR()		\
 		statSpi.timeoutIntErr++;	\
 		statSpi.rxErr++;			\
-		statSpi.lastError = err;	\
+		statSpi.lastError = SPI_TIMEOUT_ERROR;	\
 		statSpi.status = spi_getStatus(ARD_SPI);
 
 #define STATSPI_DISALIGN_ERROR()		\
@@ -228,11 +234,14 @@
 #define STATSPI_OVERRIDE_ERROR()
 #endif
 
-#define DUMP_TCP_STATE(TTCP) \
+#define DUMP_TCP_STATE(TTCP) do {\
 		INFO_TCP("ttcp:%p tpcb:%p state:%d lpcb:%p state:%d\n", \
-			TTCP, TTCP->tpcb, (TTCP->tpcb)?TTCP->tpcb->state:0, \
-			TTCP->lpcb, (TTCP->lpcb)?TTCP->lpcb->state:0);
-
+			TTCP, TTCP->tpcb[0], (TTCP->tpcb[0])?TTCP->tpcb[0]->state:0, \
+			TTCP->lpcb, (TTCP->lpcb)?TTCP->lpcb->state:0); \
+			} while(0);
+			
+#define Mode2Str(_Mode) ((_Mode==0)?"TRANSMIT":"RECEIVE")			
+#define ProtMode2Str(_protMode) ((_protMode==0)?"TCP":"UDP")
 
 typedef struct sData
 {
@@ -246,7 +255,13 @@ struct pbuf;
 
 void init_pBuf();
 
-void insert_pBuf(struct pbuf* q, uint8_t sock, void* _pcb);
+uint8_t* insert_pBuf(struct pbuf* q, uint8_t sock, void* _pcb);
+
+uint8_t* insertBuf(uint8_t sock, uint8_t* buf, uint16_t len);
+
+uint8_t* mergeBuf(uint8_t sock, uint8_t** buf, uint16_t* _len);
+
+uint16_t clearBuf(uint8_t sock);
 
 tData* get_pBuf(uint8_t sock);
 
@@ -263,5 +278,7 @@ bool getTcpDataByte(uint8_t sock, uint8_t* payload, uint8_t peek);
 bool isAvailTcpDataByte(uint8_t sock);
 
 uint8_t freeTcpData(uint8_t sock);
+
+void freeAllTcpData(uint8_t sock);
 
 #endif /* ARD_UTILS_H_ */
